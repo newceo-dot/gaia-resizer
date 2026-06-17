@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GAIA 상품 이미지 리사이저</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; padding: 30px 20px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { text-align: center; color: #1a1a2e; font-size: 24px; margin-bottom: 6px; }
+  .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 30px; }
+  .card { background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .card h2 { font-size: 16px; color: #333; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .badge { background: #4f46e5; color: white; border-radius: 20px; padding: 2px 10px; font-size: 12px; }
+  .name-input { width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; outline: none; transition: border-color 0.2s; }
+  .name-input:focus { border-color: #4f46e5; }
+  .big-drop { border: 3px dashed #ccc; border-radius: 16px; padding: 40px 20px; text-align: center; transition: all 0.2s; position: relative; cursor: pointer; background: #fafafa; }
+  .big-drop:hover, .big-drop.dragover { border-color: #4f46e5; background: #f8f7ff; }
+  .big-drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .big-drop .drop-icon { font-size: 48px; margin-bottom: 12px; }
+  .big-drop .drop-text { font-size: 16px; font-weight: 700; color: #333; margin-bottom: 6px; }
+  .big-drop .drop-sub { font-size: 13px; color: #999; }
+  .classify-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .classify-item { border: 2px solid #10b981; border-radius: 12px; overflow: hidden; }
+  .classify-item img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #f9f9f9; display: block; }
+  .classify-label { padding: 8px 10px; }
+  .classify-type { font-size: 22px; font-weight: 900; color: #4f46e5; }
+  .classify-desc { font-size: 11px; color: #10b981; font-weight: 600; }
+  .classify-fname { font-size: 10px; color: #888; word-break: break-all; margin-top: 2px; }
+  .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .btn-primary { background: #4f46e5; color: white; }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+  .btn-reset { background: #f3f4f6; color: #555; font-size: 14px; padding: 10px; margin-top: 10px; }
+  .btn-reset:hover { background: #e5e7eb; }
+  .result-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .result-item { border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; }
+  .result-item img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #f9f9f9; display: block; }
+  .result-info { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .result-name { font-size: 13px; font-weight: 600; color: #333; }
+  .result-size { font-size: 11px; color: #888; }
+  .btn-dl { background: #4f46e5; color: white; border: none; border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn-dl:hover { background: #4338ca; }
+  .progress { text-align: center; padding: 16px; color: #4f46e5; font-weight: 600; }
+  .spinner { display: inline-block; width: 22px; height: 22px; border: 3px solid #e0e0e0; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 16px; color: #1d4ed8; font-size: 13px; margin-top: 14px; }
+  .warn-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 12px 16px; color: #92400e; font-size: 13px; margin-top: 14px; }
+  .error-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px 16px; color: #dc2626; font-size: 14px; margin-bottom: 12px; }
+  .hidden { display: none !important; }
+  /* 수동 선택 드롭다운 */
+  .manual-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+  .manual-item { border: 2px solid #e0e0e0; border-radius: 12px; overflow: hidden; }
+  .manual-item img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #f9f9f9; display: block; }
+  .manual-item .manual-label { padding: 8px; }
+  .manual-item .fname { font-size: 10px; color: #888; margin-bottom: 6px; word-break: break-all; }
+  .manual-item select { width: 100%; padding: 6px 8px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; font-weight: 700; color: #4f46e5; outline: none; cursor: pointer; }
+  .manual-item select:focus { border-color: #4f46e5; }
+  @media (max-width: 600px) { .classify-grid, .result-grid, .manual-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🖼️ GAIA 상품 이미지 리사이저</h1>
+  <p class="subtitle">사진 3장을 한 번에 드롭하면 자동으로 F · S · B를 분류합니다</p>
+
+  <div class="card">
+    <h2>① 상품명 입력</h2>
+    <input type="text" class="name-input" id="productName" placeholder="예: 시티프리미엄" />
+  </div>
+
+  <div class="card">
+    <h2>② 사진 3장 업로드 <span class="badge">동시 드롭 가능</span></h2>
+
+    <div id="dropSection">
+      <div class="big-drop" id="bigDrop"
+        ondragover="onBigDragOver(event)" ondragleave="onBigDragLeave()" ondrop="onBigDrop(event)">
+        <input type="file" accept="image/*" multiple onchange="handleMultipleFiles(this.files)" />
+        <div class="drop-icon">📂</div>
+        <div class="drop-text">사진 3장을 여기에 드래그 & 드롭</div>
+        <div class="drop-sub">또는 클릭해서 파일 선택 (여러 장 동시 선택)</div>
+      </div>
+      <div id="uploadError"></div>
+    </div>
+
+    <!-- 분류 중 -->
+    <div id="classifyingSection" class="hidden">
+      <div class="progress"><span class="spinner"></span> 이미지 분석 중...</div>
+    </div>
+
+    <!-- 자동 분류 결과 -->
+    <div id="classifyResult" class="hidden">
+      <div class="classify-grid" id="classifyGrid"></div>
+      <div id="classifyInfo"></div>
+      <!-- 분류가 불확실할 때 수동 조정 -->
+      <div id="manualSection" class="hidden">
+        <div class="warn-box">⚠️ 자동 분류가 불확실합니다. 아래에서 직접 선택해주세요.</div>
+        <div class="manual-grid" id="manualGrid"></div>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="applyManual()">✅ 선택 적용</button>
+      </div>
+      <button class="btn btn-reset" onclick="resetUpload()">↺ 다시 업로드</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="generateCard">
+    <div id="generateError"></div>
+    <div id="generateProgress" class="hidden">
+      <div class="progress"><span class="spinner"></span> 이미지 처리 중...</div>
+    </div>
+    <button class="btn btn-primary" id="runBtn" onclick="processImages()">🚀 이미지 생성 시작</button>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <h2>③ 결과 다운로드</h2>
+    <div class="result-grid" id="resultGrid"></div>
+  </div>
+</div>
+
+<script>
+let assignedFiles = { F: null, S: null, B: null };
+let pendingFiles = []; // 수동 배정 대기
+
+// ── 드롭존 ──────────────────────────────────────
+function onBigDragOver(e) { e.preventDefault(); document.getElementById('bigDrop').classList.add('dragover'); }
+function onBigDragLeave() { document.getElementById('bigDrop').classList.remove('dragover'); }
+function onBigDrop(e) { e.preventDefault(); onBigDragLeave(); handleMultipleFiles(e.dataTransfer.files); }
+
+async function handleMultipleFiles(fileList) {
+  const imgs = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+  const errEl = document.getElementById('uploadError');
+  errEl.innerHTML = '';
+  if (imgs.length === 0) { errEl.innerHTML = '<div class="error-box">이미지 파일을 업로드해주세요.</div>'; return; }
+  if (imgs.length !== 3) { errEl.innerHTML = `<div class="error-box">사진 3장을 올려주세요. (현재 ${imgs.length}장)</div>`; return; }
+
+  document.getElementById('dropSection').classList.add('hidden');
+  document.getElementById('classifyingSection').classList.remove('hidden');
+
+  const dataUrls = await Promise.all(imgs.map(readFileAsDataURL));
+  const scores = await Promise.all(dataUrls.map((du, i) => analyzeImage(du, imgs[i].name)));
+
+  document.getElementById('classifyingSection').classList.add('hidden');
+
+  const result = assignByScore(imgs, dataUrls, scores);
+  pendingFiles = imgs.map((f, i) => ({ file: f, dataUrl: dataUrls[i], score: scores[i] }));
+
+  renderClassifyResult(result.assigned, result.confident);
+  if (result.confident) {
+    assignedFiles = result.assigned;
+    document.getElementById('generateCard').classList.remove('hidden');
+  }
+}
+
+// ── 이미지 분석: 바코드/텍스트 밀도 + 엣지 방향성 ──
+async function analyzeImage(dataUrl, filename) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const SIZE = 100;
+      const c = document.createElement('canvas');
+      c.width = c.height = SIZE;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, SIZE, SIZE);
+      const px = ctx.getImageData(0, 0, SIZE, SIZE).data;
+
+      // 그레이스케일 배열
+      const gray = [];
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        gray.push(0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2]);
+      }
+
+      // 수직 엣지 강도 (바코드 = 수직선 많음)
+      let vertEdge = 0, horizEdge = 0;
+      for (let y = 1; y < SIZE-1; y++) {
+        for (let x = 1; x < SIZE-1; x++) {
+          const gx = Math.abs(gray[y*SIZE+(x+1)] - gray[y*SIZE+(x-1)]);
+          const gy = Math.abs(gray[(y+1)*SIZE+x] - gray[(y-1)*SIZE+x]);
+          vertEdge += gx;
+          horizEdge += gy;
+        }
+      }
+
+      // 바코드 점수: 수직엣지 비율이 높을수록
+      const barcodeScore = vertEdge / (vertEdge + horizEdge + 1);
+
+      // 밝기 분산 (바코드는 흑백 대비 강함)
+      const mean = gray.reduce((a, b) => a + b, 0) / gray.length;
+      const variance = gray.reduce((s, v) => s + (v - mean) ** 2, 0) / gray.length;
+
+      // 중앙 vs 가장자리 밝기차 (정면은 중앙에 피사체 집중)
+      let centerBright = 0, edgeBright = 0, cc = 0, ec = 0;
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          const cx = Math.abs(x - SIZE/2) < SIZE/4 && Math.abs(y - SIZE/2) < SIZE/4;
+          if (cx) { centerBright += gray[y*SIZE+x]; cc++; }
+          else { edgeBright += gray[y*SIZE+x]; ec++; }
+        }
+      }
+      const centerContrast = Math.abs(centerBright/cc - edgeBright/ec);
+
+      // 파일명 힌트
+      const name = filename.toUpperCase();
+      const nameHintF = name.includes('_F') || name.endsWith('F.JPG') ? 10 : 0;
+      const nameHintS = name.includes('_S') || name.endsWith('S.JPG') ? 10 : 0;
+      const nameHintB = name.includes('_B') || name.endsWith('B.JPG') || name.includes('BARCODE') ? 10 : 0;
+
+      resolve({
+        barcodeScore,   // 높을수록 B 가능성
+        variance,       // 높을수록 흑백 대비 강함 (B 가능성)
+        centerContrast, // 높을수록 F 가능성
+        nameHintF, nameHintS, nameHintB
+      });
+    };
+    img.src = dataUrl;
+  });
+}
+
+// ── 점수 기반 F/S/B 배정 ─────────────────────────
+function assignByScore(files, dataUrls, scores) {
+  // B 점수: barcodeScore 높고 variance 높음
+  const bScores = scores.map(s => s.barcodeScore * 2 + s.variance / 5000 + s.nameHintB);
+  // F 점수: centerContrast 높음
+  const fScores = scores.map(s => s.centerContrast / 10 + s.nameHintF);
+
+  // B 먼저 배정 (가장 높은 bScore)
+  const bIdx = argmax(bScores);
+  // F는 나머지 중 fScore 높은 것
+  const remaining = [0,1,2].filter(i => i !== bIdx);
+  const fIdx = remaining[fScores[remaining[0]] >= fScores[remaining[1]] ? 0 : 1];
+  const sIdx = remaining.find(i => i !== fIdx);
+
+  // 신뢰도: bScore가 나머지보다 확실히 높은지
+  const sortedB = [...bScores].sort((a,b) => b-a);
+  const confident = (sortedB[0] - sortedB[1]) > 0.05;
+
+  return {
+    assigned: {
+      F: { file: files[fIdx], dataUrl: dataUrls[fIdx] },
+      S: { file: files[sIdx], dataUrl: dataUrls[sIdx] },
+      B: { file: files[bIdx], dataUrl: dataUrls[bIdx] },
+    },
+    confident
+  };
+}
+
+function argmax(arr) { return arr.indexOf(Math.max(...arr)); }
+
+// ── 결과 렌더링 ──────────────────────────────────
+function renderClassifyResult(assigned, confident) {
+  const grid = document.getElementById('classifyGrid');
+  grid.innerHTML = '';
+  const descs = { F: '정면', S: '45도', B: '바코드' };
+  for (const type of ['F', 'S', 'B']) {
+    const item = assigned[type];
+    const div = document.createElement('div');
+    div.className = 'classify-item';
+    div.innerHTML = `
+      <img src="${item.dataUrl}" />
+      <div class="classify-label">
+        <div class="classify-type">${type}</div>
+        <div class="classify-desc">${descs[type]}</div>
+        <div class="classify-fname">${item.file.name}</div>
+      </div>`;
+    grid.appendChild(div);
+  }
+
+  const infoEl = document.getElementById('classifyInfo');
+  if (confident) {
+    infoEl.innerHTML = '<div class="info-box">✅ 자동 분류 완료! 결과를 확인하고 이미지를 생성하세요.</div>';
+    document.getElementById('manualSection').classList.add('hidden');
+  } else {
+    infoEl.innerHTML = '';
+    renderManualGrid();
+    document.getElementById('manualSection').classList.remove('hidden');
+  }
+  document.getElementById('classifyResult').classList.remove('hidden');
+}
+
+function renderManualGrid() {
+  const grid = document.getElementById('manualGrid');
+  grid.innerHTML = '';
+  pendingFiles.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'manual-item';
+    div.innerHTML = `
+      <img src="${item.dataUrl}" />
+      <div class="manual-label">
+        <div class="fname">${item.file.name}</div>
+        <select id="manual-${i}">
+          <option value="">-- 선택 --</option>
+          <option value="F">F (정면)</option>
+          <option value="S">S (45도)</option>
+          <option value="B">B (바코드)</option>
+        </select>
+      </div>`;
+    grid.appendChild(div);
+  });
+}
+
+function applyManual() {
+  const vals = pendingFiles.map((_, i) => document.getElementById(`manual-${i}`).value);
+  if (vals.some(v => !v)) { alert('3장 모두 선택해주세요.'); return; }
+  if (new Set(vals).size !== 3) { alert('F, S, B를 각각 하나씩 선택해주세요.'); return; }
+  vals.forEach((type, i) => {
+    assignedFiles[type] = { file: pendingFiles[i].file, dataUrl: pendingFiles[i].dataUrl };
+  });
+  // 분류 결과 업데이트
+  renderClassifyResult(assignedFiles, true);
+  document.getElementById('manualSection').classList.add('hidden');
+  document.getElementById('generateCard').classList.remove('hidden');
+}
+
+function resetUpload() {
+  assignedFiles = { F: null, S: null, B: null };
+  pendingFiles = [];
+  document.getElementById('dropSection').classList.remove('hidden');
+  document.getElementById('classifyResult').classList.add('hidden');
+  document.getElementById('classifyingSection').classList.add('hidden');
+  document.getElementById('generateCard').classList.add('hidden');
+  document.getElementById('resultCard').classList.add('hidden');
+  document.getElementById('uploadError').innerHTML = '';
+  document.getElementById('resultGrid').innerHTML = '';
+}
+
+// ── 이미지 처리 ──────────────────────────────────
+function readFileAsDataURL(file) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
+}
+function loadImageFromDataURL(dataUrl) {
+  return new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = dataUrl; });
+}
+function renderToCanvas(img, size) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+  const sc = Math.min(size / img.naturalWidth, size / img.naturalHeight);
+  const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
+  ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+  return c;
+}
+function canvasToDataURL(c, q) { return c.toDataURL('image/jpeg', q); }
+function getByteSize(du) { return Math.ceil(du.split(',')[1].length * 3 / 4); }
+function compressPOG(img) {
+  const c = renderToCanvas(img, 500);
+  let q = 0.92;
+  while (q > 0.05) { const du = canvasToDataURL(c, q); if (getByteSize(du) <= 50*1024) return du; q -= 0.05; }
+  return canvasToDataURL(c, 0.05);
+}
+
+function showResult(tag, dataUrl, filename) {
+  const kb = (getByteSize(dataUrl)/1024).toFixed(1);
+  const div = document.createElement('div');
+  div.className = 'result-item';
+  div.innerHTML = `
+    <img src="${dataUrl}" />
+    <div class="result-info">
+      <div>
+        <div class="result-name">${filename}</div>
+        <div class="result-size">${tag==='POG'?'500×500':'1000×1000'} · ${kb}KB</div>
+      </div>
+      <a class="btn-dl" href="${dataUrl}" download="${filename}">⬇ 다운로드</a>
+    </div>`;
+  document.getElementById('resultGrid').appendChild(div);
+}
+
+async function processImages() {
+  const name = document.getElementById('productName').value.trim();
+  const errEl = document.getElementById('generateError');
+  errEl.innerHTML = '';
+  if (!name) { errEl.innerHTML = '<div class="error-box">상품명을 입력해주세요.</div>'; return; }
+  if (!assignedFiles.F) { errEl.innerHTML = '<div class="error-box">사진을 먼저 업로드해주세요.</div>'; return; }
+
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('generateProgress').classList.remove('hidden');
+  document.getElementById('resultCard').classList.add('hidden');
+  document.getElementById('resultGrid').innerHTML = '';
+
+  try {
+    const [imgF, imgS, imgB] = await Promise.all([
+      loadImageFromDataURL(assignedFiles.F.dataUrl),
+      loadImageFromDataURL(assignedFiles.S.dataUrl),
+      loadImageFromDataURL(assignedFiles.B.dataUrl),
+    ]);
+    showResult('F',   canvasToDataURL(renderToCanvas(imgF, 1000), 0.92), `${name}F.jpg`);
+    showResult('S',   canvasToDataURL(renderToCanvas(imgS, 1000), 0.92), `${name}S.jpg`);
+    showResult('B',   canvasToDataURL(renderToCanvas(imgB, 1000), 0.92), `${name}B.jpg`);
+    showResult('POG', compressPOG(imgF), `${name}POG.jpg`);
+    document.getElementById('resultCard').classList.remove('hidden');
+    document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
+  } catch(e) {
+    errEl.innerHTML = `<div class="error-box">처리 중 오류: ${e.message}</div>`;
+  }
+  document.getElementById('generateProgress').classList.add('hidden');
+  document.getElementById('runBtn').disabled = false;
+}
+</script>
+</body>
+</html>
