@@ -16,7 +16,6 @@
   .name-input { width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px; outline: none; transition: border-color 0.2s; }
   .name-input:focus { border-color: #4f46e5; }
 
-  /* 드롭존 */
   .big-drop { border: 3px dashed #ccc; border-radius: 16px; padding: 40px 20px; text-align: center; transition: all 0.2s; position: relative; cursor: pointer; background: #fafafa; }
   .big-drop:hover, .big-drop.dragover { border-color: #4f46e5; background: #f8f7ff; }
   .big-drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
@@ -24,20 +23,24 @@
   .big-drop .drop-text { font-size: 16px; font-weight: 700; color: #333; margin-bottom: 6px; }
   .big-drop .drop-sub { font-size: 13px; color: #999; }
 
-  /* 분류 그리드 */
   .classify-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
-  .classify-item { border: 2px solid #10b981; border-radius: 12px; overflow: hidden; cursor: grab; transition: all 0.2s; user-select: none; }
+  .classify-item { border: 2px solid #10b981; border-radius: 12px; overflow: hidden; cursor: grab; transition: border-color 0.2s; user-select: none; }
   .classify-item:active { cursor: grabbing; }
   .classify-item.dragging { opacity: 0.4; border-style: dashed; }
-  .classify-item.drag-over { border-color: #4f46e5; background: #f8f7ff; transform: scale(1.02); }
-  .classify-item img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #f9f9f9; display: block; pointer-events: none; }
+  .classify-item.drag-over { border-color: #4f46e5; background: #f0f0ff; transform: scale(1.02); }
+
+  /* 이미지 + 회전 버튼 래퍼 */
+  .img-wrap { position: relative; width: 100%; aspect-ratio: 1; background: #f9f9f9; overflow: hidden; }
+  .img-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; transition: transform 0.3s; }
+  .rotate-btn { position: absolute; bottom: 6px; right: 6px; background: rgba(79,70,229,0.85); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: background 0.2s; }
+  .rotate-btn:hover { background: rgba(67,56,202,1); }
+
   .classify-label { padding: 8px 10px; }
   .classify-type { font-size: 22px; font-weight: 900; color: #4f46e5; }
   .classify-desc { font-size: 11px; color: #10b981; font-weight: 600; }
   .classify-fname { font-size: 10px; color: #888; word-break: break-all; margin-top: 2px; }
   .drag-hint { text-align: center; font-size: 12px; color: #999; margin-top: 10px; }
 
-  /* 버튼 */
   .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
   .btn-primary { background: #4f46e5; color: white; }
   .btn-primary:hover { background: #4338ca; }
@@ -45,7 +48,6 @@
   .btn-reset { background: #f3f4f6; color: #555; font-size: 14px; padding: 10px; margin-top: 10px; }
   .btn-reset:hover { background: #e5e7eb; }
 
-  /* 결과 */
   .result-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .result-item { border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; }
   .result-item img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #f9f9f9; display: block; }
@@ -67,7 +69,7 @@
 <body>
 <div class="container">
   <h1>🖼️ GAIA 상품 이미지 리사이저</h1>
-  <p class="subtitle">사진 3장을 드롭 → 순서가 틀리면 카드를 드래그해서 교체</p>
+  <p class="subtitle">사진 3장 드롭 → 카드 드래그로 순서 교체 · 🔄 버튼으로 회전</p>
 
   <div class="card">
     <h2>① 상품명 입력</h2>
@@ -94,7 +96,7 @@
 
     <div id="classifyResult" class="hidden">
       <div class="classify-grid" id="classifyGrid"></div>
-      <div class="drag-hint">🔄 순서가 틀리면 카드를 드래그해서 위치를 바꾸세요</div>
+      <div class="drag-hint">🔄 오른쪽 하단 버튼으로 회전 · 카드 드래그로 순서 교체</div>
       <div class="info-box" id="infoBox"></div>
       <button class="btn btn-reset" onclick="resetUpload()">↺ 다시 업로드</button>
     </div>
@@ -115,10 +117,10 @@
 </div>
 
 <script>
-// 순서 고정: [0]=F, [1]=S, [2]=B
-let slots = [null, null, null]; // {file, dataUrl}
+let slots = [null, null, null]; // {file, dataUrl, rotation}
 const TYPES = ['F', 'S', 'B'];
 const DESCS = ['정면', '사이드', '바코드'];
+let dragSrcIdx = null;
 
 // ── 드롭존 ──
 function onBigDragOver(e) { e.preventDefault(); document.getElementById('bigDrop').classList.add('dragover'); }
@@ -136,34 +138,22 @@ async function handleMultipleFiles(fileList) {
   document.getElementById('classifyingSection').classList.remove('hidden');
 
   const dataUrls = await Promise.all(imgs.map(readFileAsDataURL));
-
-  // 바코드 감지로 B만 찾고, 나머지는 파일명 순서대로 F→S
-  const bIdx = detectBarcode(dataUrls);
+  const scores = await Promise.all(dataUrls.map(du => getVertEdgeScore(du)));
+  const bIdx = scores.indexOf(Math.max(...scores));
   const others = [0,1,2].filter(i => i !== bIdx);
 
-  slots[0] = { file: imgs[others[0]], dataUrl: dataUrls[others[0]] }; // F
-  slots[1] = { file: imgs[others[1]], dataUrl: dataUrls[others[1]] }; // S
-  slots[2] = { file: imgs[bIdx],     dataUrl: dataUrls[bIdx] };       // B
+  slots[0] = { file: imgs[others[0]], dataUrl: dataUrls[others[0]], rotation: 0 };
+  slots[1] = { file: imgs[others[1]], dataUrl: dataUrls[others[1]], rotation: 0 };
+  slots[2] = { file: imgs[bIdx],     dataUrl: dataUrls[bIdx],      rotation: 0 };
 
   document.getElementById('classifyingSection').classList.add('hidden');
   renderGrid();
   document.getElementById('classifyResult').classList.remove('hidden');
-  document.getElementById('infoBox').textContent = '✅ 분류 완료! 순서가 틀리면 카드를 드래그해서 바꾸세요.';
+  document.getElementById('infoBox').textContent = '✅ 분류 완료! 순서 교체는 드래그, 회전은 🔄 버튼을 누르세요.';
   document.getElementById('generateCard').classList.remove('hidden');
 }
 
-// 바코드 감지: 수직 엣지 비율이 가장 높은 이미지
-function detectBarcode(dataUrls) {
-  // 동기 분석이 필요하므로 미리 계산된 점수 사용
-  // 실제로는 canvas로 분석
-  return 0; // 기본값, 아래 async 버전으로 대체
-}
-
-async function analyzeAll(imgs, dataUrls) {
-  const scores = await Promise.all(dataUrls.map(du => getVertEdgeScore(du)));
-  return scores.indexOf(Math.max(...scores));
-}
-
+// 수직 엣지 점수 (바코드 감지)
 function getVertEdgeScore(dataUrl) {
   return new Promise(resolve => {
     const img = new Image();
@@ -187,51 +177,34 @@ function getVertEdgeScore(dataUrl) {
   });
 }
 
-// handleMultipleFiles 수정: async 분석
-async function handleMultipleFiles(fileList) {
-  const imgs = Array.from(fileList).filter(f => f.type.startsWith('image/'));
-  const errEl = document.getElementById('uploadError');
-  errEl.innerHTML = '';
-  if (imgs.length === 0) { errEl.innerHTML = '<div class="error-box">이미지 파일을 업로드해주세요.</div>'; return; }
-  if (imgs.length !== 3) { errEl.innerHTML = `<div class="error-box">사진 3장을 올려주세요. (현재 ${imgs.length}장)</div>`; return; }
-
-  document.getElementById('dropSection').classList.add('hidden');
-  document.getElementById('classifyingSection').classList.remove('hidden');
-
-  const dataUrls = await Promise.all(imgs.map(readFileAsDataURL));
-  const scores = await Promise.all(dataUrls.map(du => getVertEdgeScore(du)));
-  const bIdx = scores.indexOf(Math.max(...scores));
-  const others = [0,1,2].filter(i => i !== bIdx);
-
-  slots[0] = { file: imgs[others[0]], dataUrl: dataUrls[others[0]] };
-  slots[1] = { file: imgs[others[1]], dataUrl: dataUrls[others[1]] };
-  slots[2] = { file: imgs[bIdx],     dataUrl: dataUrls[bIdx] };
-
-  document.getElementById('classifyingSection').classList.add('hidden');
-  renderGrid();
-  document.getElementById('classifyResult').classList.remove('hidden');
-  document.getElementById('infoBox').textContent = '✅ 분류 완료! 순서가 틀리면 카드를 드래그해서 교체하세요.';
-  document.getElementById('generateCard').classList.remove('hidden');
+// ── 회전 ──
+function rotate(idx) {
+  slots[idx].rotation = (slots[idx].rotation + 90) % 360;
+  const img = document.querySelector(`#card-${idx} img`);
+  img.style.transform = `rotate(${slots[idx].rotation}deg)`;
 }
 
-// ── 그리드 렌더링 + 드래그 교체 ──
-let dragSrcIdx = null;
-
+// ── 그리드 렌더링 ──
 function renderGrid() {
   const grid = document.getElementById('classifyGrid');
   grid.innerHTML = '';
   slots.forEach((item, i) => {
     const div = document.createElement('div');
     div.className = 'classify-item';
+    div.id = `card-${i}`;
     div.draggable = true;
     div.dataset.idx = i;
     div.innerHTML = `
-      <img src="${item.dataUrl}" />
+      <div class="img-wrap">
+        <img src="${item.dataUrl}" style="transform:rotate(${item.rotation}deg)" />
+        <button class="rotate-btn" onclick="rotate(${i}); event.stopPropagation();" title="90도 회전">🔄</button>
+      </div>
       <div class="classify-label">
         <div class="classify-type">${TYPES[i]}</div>
         <div class="classify-desc">${DESCS[i]}</div>
         <div class="classify-fname">${item.file.name}</div>
       </div>`;
+
     div.addEventListener('dragstart', e => {
       dragSrcIdx = i;
       setTimeout(() => div.classList.add('dragging'), 0);
@@ -243,7 +216,6 @@ function renderGrid() {
       e.preventDefault();
       div.classList.remove('drag-over');
       if (dragSrcIdx !== null && dragSrcIdx !== i) {
-        // 스왑
         const tmp = slots[dragSrcIdx];
         slots[dragSrcIdx] = slots[i];
         slots[i] = tmp;
@@ -273,23 +245,31 @@ function readFileAsDataURL(file) {
 function loadImageFromDataURL(dataUrl) {
   return new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = dataUrl; });
 }
-function renderToCanvas(img, size) {
+
+// 회전 적용해서 캔버스 렌더링
+function renderToCanvas(img, size, rotation) {
   const c = document.createElement('canvas'); c.width = c.height = size;
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+  ctx.save();
+  ctx.translate(size/2, size/2);
+  ctx.rotate((rotation * Math.PI) / 180);
   const sc = Math.min(size / img.naturalWidth, size / img.naturalHeight);
   const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
-  ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+  ctx.drawImage(img, -w/2, -h/2, w, h);
+  ctx.restore();
   return c;
 }
+
 function canvasToDataURL(c, q) { return c.toDataURL('image/jpeg', q); }
 function getByteSize(du) { return Math.ceil(du.split(',')[1].length * 3 / 4); }
-function compressPOG(img) {
-  const c = renderToCanvas(img, 500);
+function compressPOG(img, rotation) {
+  const c = renderToCanvas(img, 500, rotation);
   let q = 0.92;
   while (q > 0.05) { const du = canvasToDataURL(c, q); if (getByteSize(du) <= 50*1024) return du; q -= 0.05; }
   return canvasToDataURL(c, 0.05);
 }
+
 function showResult(tag, dataUrl, filename) {
   const kb = (getByteSize(dataUrl)/1024).toFixed(1);
   const div = document.createElement('div');
@@ -319,11 +299,11 @@ async function processImages() {
   document.getElementById('resultGrid').innerHTML = '';
 
   try {
-    const [imgF, imgS, imgB] = await Promise.all(slots.map(s => loadImageFromDataURL(s.dataUrl)));
-    showResult('F',   canvasToDataURL(renderToCanvas(imgF, 1000), 0.92), `${name}F.jpg`);
-    showResult('S',   canvasToDataURL(renderToCanvas(imgS, 1000), 0.92), `${name}S.jpg`);
-    showResult('B',   canvasToDataURL(renderToCanvas(imgB, 1000), 0.92), `${name}B.jpg`);
-    showResult('POG', compressPOG(imgF), `${name}POG.jpg`);
+    const images = await Promise.all(slots.map(s => loadImageFromDataURL(s.dataUrl)));
+    showResult('F',   canvasToDataURL(renderToCanvas(images[0], 1000, slots[0].rotation), 0.92), `${name}F.jpg`);
+    showResult('S',   canvasToDataURL(renderToCanvas(images[1], 1000, slots[1].rotation), 0.92), `${name}S.jpg`);
+    showResult('B',   canvasToDataURL(renderToCanvas(images[2], 1000, slots[2].rotation), 0.92), `${name}B.jpg`);
+    showResult('POG', compressPOG(images[0], slots[0].rotation), `${name}POG.jpg`);
     document.getElementById('resultCard').classList.remove('hidden');
     document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
   } catch(e) {
